@@ -12,7 +12,7 @@ function Replace-Exact {
   $count = ([regex]::Matches($content, [regex]::Escape($Old))).Count
 
   if ($count -ne $ExpectedCount) {
-    throw "Falha em $Path: esperado $ExpectedCount ocorrência(s), encontrado $count.`nTrecho: $Old"
+    throw "Falha em ${Path}: esperado $ExpectedCount ocorrência(s), encontrado $count.`nTrecho: $Old"
   }
 
   $content = $content.Replace($Old, $New)
