@@ -16,7 +16,11 @@ function Replace-RegexOne {
   }
 
   $content = $regex.Replace($content, $Replacement, 1)
-  Set-Content -Path $Path -Value $content -Encoding UTF8 -NoNewline
+
+  # Windows PowerShell 5 grava BOM ao usar Set-Content -Encoding UTF8.
+  # Escrevemos explicitamente UTF-8 sem BOM para nao alterar o primeiro caractere dos arquivos JS.
+  $utf8SemBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $content, $utf8SemBom)
 }
 
 $root = Split-Path -Parent $PSScriptRoot
