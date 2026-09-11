@@ -1,32 +1,22 @@
 $ErrorActionPreference = 'Stop'
 
-function Ensure-RegexReplacement {
+function Replace-RegexOne {
   param(
     [string]$Path,
-    [string]$OldPattern,
-    [string]$NewPattern,
+    [string]$Pattern,
     [string]$Replacement
   )
 
   $content = Get-Content -Raw -Encoding UTF8 $Path
-  $options = [System.Text.RegularExpressions.RegexOptions]::Singleline
-  $oldRegex = [regex]::new($OldPattern, $options)
-  $newRegex = [regex]::new($NewPattern, $options)
+  $regex = [regex]::new($Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+  $count = $regex.Matches($content).Count
 
-  $oldCount = $oldRegex.Matches($content).Count
-  $newCount = $newRegex.Matches($content).Count
-
-  if ($oldCount -eq 1) {
-    $content = $oldRegex.Replace($content, $Replacement, 1)
-    Set-Content -Path $Path -Value $content -Encoding UTF8 -NoNewline
-    return
+  if ($count -ne 1) {
+    throw "Falha em ${Path}: esperado 1 ocorrencia(s), encontrado $count.`nPadrao: $Pattern"
   }
 
-  if ($oldCount -eq 0 -and $newCount -ge 1) {
-    return
-  }
-
-  throw "Estado inesperado em ${Path}. Antigo=$oldCount Novo=$newCount.`nPadrao antigo: $OldPattern`nPadrao novo: $NewPattern"
+  $content = $regex.Replace($content, $Replacement, 1)
+  Set-Content -Path $Path -Value $content -Encoding UTF8 -NoNewline
 }
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -35,30 +25,30 @@ $analises = Join-Path $root 'src\AtualizarAnalises.js'
 $movimentos = Join-Path $root 'src\MovimentosEspeciais.js'
 $tempMigracao = Join-Path $root 'src\temp_migrarQuantidadeOriginal.js'
 
+# IMPORTANTE: este script deve ser executado sobre os arquivos limpos da branch.
+
 # ImportarCompras.js - cabecalhos fisicos da COMPRAS_RAW no reprocessamento
-Ensure-RegexReplacement $importar "cabecalhos\.indexOf\(\s*'unidade'\s*\)" "cabecalhos\.indexOf\(\s*'unidade_compra'\s*\)" "cabecalhos.indexOf('unidade_compra')"
-Ensure-RegexReplacement $importar "cabecalhos\.indexOf\(\s*'qtd_unidade'\s*\)" "cabecalhos\.indexOf\(\s*'unidades_por_embalagem'\s*\)" "cabecalhos.indexOf('unidades_por_embalagem')"
-Ensure-RegexReplacement $importar "cabecalhos\.indexOf\(\s*'qtd'\s*\)" "cabecalhos\.indexOf\(\s*'qtd_compra_convertida'\s*\)" "cabecalhos.indexOf('qtd_compra_convertida')"
-Ensure-RegexReplacement $importar "cabecalhos\.indexOf\(\s*'qtd_original'\s*\)" "cabecalhos\.indexOf\(\s*'qtd_original_compra'\s*\)" "cabecalhos.indexOf('qtd_original_compra')"
+Replace-RegexOne $importar "cabecalhos\.indexOf\(\s*'unidade'\s*\)" "cabecalhos.indexOf('unidade_compra')"
+Replace-RegexOne $importar "cabecalhos\.indexOf\(\s*'qtd_unidade'\s*\)" "cabecalhos.indexOf('unidades_por_embalagem')"
+Replace-RegexOne $importar "cabecalhos\.indexOf\(\s*'qtd'\s*\)" "cabecalhos.indexOf('qtd_compra_convertida')"
+Replace-RegexOne $importar "cabecalhos\.indexOf\(\s*'qtd_original'\s*\)" "cabecalhos.indexOf('qtd_original_compra')"
 
 # Fila de conversoes pendentes - leitura por objeto da COMPRAS_RAW
-Ensure-RegexReplacement $importar "item\.unidade\s*\|\|" "item\.unidade_compra\s*\|\|" "item.unidade_compra ||"
-Ensure-RegexReplacement $importar "item\.qtd_unidade\s*\|\|\s*0" "item\.unidades_por_embalagem\s*\|\|\s*0" "item.unidades_por_embalagem || 0"
-Ensure-RegexReplacement $importar "item\.qtd_original\s*\|\|\s*item\.qtd\s*\|\|" "item\.qtd_original_compra\s*\|\|\s*item\.qtd_compra_convertida\s*\|\|" "item.qtd_original_compra ||`n        item.qtd_compra_convertida ||"
+Replace-RegexOne $importar "item\.unidade\s*\|\|" "item.unidade_compra ||"
+Replace-RegexOne $importar "item\.qtd_unidade\s*\|\|\s*0" "item.unidades_por_embalagem || 0"
+Replace-RegexOne $importar "item\.qtd_original\s*\|\|\s*item\.qtd\s*\|\|" "item.qtd_original_compra ||`n        item.qtd_compra_convertida ||"
 
 # Analises - quantidade normalizada da compra
-Ensure-RegexReplacement $analises "qtd:\s*parseNumero\(item\.qtd\)" "qtd:\s*parseNumero\(item\.qtd_compra_convertida\)" "qtd: parseNumero(item.qtd_compra_convertida)"
+Replace-RegexOne $analises "qtd:\s*parseNumero\(item\.qtd\)" "qtd: parseNumero(item.qtd_compra_convertida)"
 
 # Movimentos especiais - quantidade normalizada da compra
-Ensure-RegexReplacement $movimentos "parseNumero\(item\.qtd\)" "parseNumero\(item\.qtd_compra_convertida\)" "parseNumero(item.qtd_compra_convertida)"
+Replace-RegexOne $movimentos "parseNumero\(item\.qtd\)" "parseNumero(item.qtd_compra_convertida)"
 
 # Utilitario temporario de migracao
-Ensure-RegexReplacement $tempMigracao "cabecalhos\.indexOf\(\s*'unidade'\s*\)" "cabecalhos\.indexOf\(\s*'unidade_compra'\s*\)" "cabecalhos.indexOf('unidade_compra')"
-Ensure-RegexReplacement $tempMigracao "cabecalhos\.indexOf\(\s*'qtd_unidade'\s*\)" "cabecalhos\.indexOf\(\s*'unidades_por_embalagem'\s*\)" "cabecalhos.indexOf('unidades_por_embalagem')"
-Ensure-RegexReplacement $tempMigracao "cabecalhos\.indexOf\(\s*'qtd'\s*\)" "cabecalhos\.indexOf\(\s*'qtd_compra_convertida'\s*\)" "cabecalhos.indexOf('qtd_compra_convertida')"
-Ensure-RegexReplacement $tempMigracao "cabecalhos\.indexOf\(\s*'qtd_original'\s*\)" "cabecalhos\.indexOf\(\s*'qtd_original_compra'\s*\)" "cabecalhos.indexOf('qtd_original_compra')"
+Replace-RegexOne $tempMigracao "cabecalhos\.indexOf\(\s*'unidade'\s*\)" "cabecalhos.indexOf('unidade_compra')"
+Replace-RegexOne $tempMigracao "cabecalhos\.indexOf\(\s*'qtd_unidade'\s*\)" "cabecalhos.indexOf('unidades_por_embalagem')"
+Replace-RegexOne $tempMigracao "cabecalhos\.indexOf\(\s*'qtd'\s*\)" "cabecalhos.indexOf('qtd_compra_convertida')"
+Replace-RegexOne $tempMigracao "cabecalhos\.indexOf\(\s*'qtd_original'\s*\)" "cabecalhos.indexOf('qtd_original_compra')"
 
 Write-Host 'Refatoracao aplicada com sucesso.' -ForegroundColor Green
-Write-Host 'O script pode continuar mesmo se parte das alteracoes ja tiver sido aplicada.'
-Write-Host ''
 Write-Host 'Execute agora: git diff --check' -ForegroundColor Cyan
