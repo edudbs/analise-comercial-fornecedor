@@ -38,8 +38,8 @@ Replace-RegexOne $importar "item\.unidade\s*\|\|" "item.unidade_compra ||"
 Replace-RegexOne $importar "item\.qtd_unidade\s*\|\|\s*0" "item.unidades_por_embalagem || 0"
 Replace-RegexOne $importar "item\.qtd_original\s*\|\|\s*item\.qtd\s*\|\|" "item.qtd_original_compra ||`n        item.qtd_compra_convertida ||"
 
-# Analises - quantidade normalizada da compra
-Replace-RegexOne $analises "qtd:\s*parseNumero\(item\.qtd\)" "qtd: parseNumero(item.qtd_compra_convertida)"
+# Analises - altera SOMENTE a quantidade lida de COMPRAS_RAW dentro de prepararComprasPeriodo_.
+Replace-RegexOne $analises "(function prepararComprasPeriodo_\(periodo\)[\s\S]*?produto:\s*item\.produto,\s*)qtd:\s*parseNumero\(item\.qtd\)(,\s*valor_total:)" '$1qtd: parseNumero(item.qtd_compra_convertida)$2'
 
 # Movimentos especiais - quantidade normalizada da compra
 Replace-RegexOne $movimentos "parseNumero\(item\.qtd\)" "parseNumero(item.qtd_compra_convertida)"
