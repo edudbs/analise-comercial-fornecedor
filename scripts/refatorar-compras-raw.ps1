@@ -16,13 +16,13 @@ function Ensure-RegexReplacement {
   $oldCount = $oldRegex.Matches($content).Count
   $newCount = $newRegex.Matches($content).Count
 
-  if ($oldCount -eq 1 -and $newCount -eq 0) {
+  if ($oldCount -eq 1) {
     $content = $oldRegex.Replace($content, $Replacement, 1)
     Set-Content -Path $Path -Value $content -Encoding UTF8 -NoNewline
     return
   }
 
-  if ($oldCount -eq 0 -and $newCount -eq 1) {
+  if ($oldCount -eq 0 -and $newCount -ge 1) {
     return
   }
 
@@ -59,6 +59,6 @@ Ensure-RegexReplacement $tempMigracao "cabecalhos\.indexOf\(\s*'qtd'\s*\)" "cabe
 Ensure-RegexReplacement $tempMigracao "cabecalhos\.indexOf\(\s*'qtd_original'\s*\)" "cabecalhos\.indexOf\(\s*'qtd_original_compra'\s*\)" "cabecalhos.indexOf('qtd_original_compra')"
 
 Write-Host 'Refatoracao aplicada com sucesso.' -ForegroundColor Green
-Write-Host 'O script e idempotente: pode ser executado novamente sem duplicar alteracoes.'
+Write-Host 'O script pode continuar mesmo se parte das alteracoes ja tiver sido aplicada.'
 Write-Host ''
 Write-Host 'Execute agora: git diff --check' -ForegroundColor Cyan
