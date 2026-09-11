@@ -700,24 +700,16 @@ function reprocessarConversoesCompras() {
         ),
 
       unidade:
-        cabecalhos.indexOf(
-          'unidade'
-        ),
+        cabecalhos.indexOf('unidade_compra'),
 
       qtdUnidade:
-        cabecalhos.indexOf(
-          'qtd_unidade'
-        ),
+        cabecalhos.indexOf('unidades_por_embalagem'),
 
       qtd:
-        cabecalhos.indexOf(
-          'qtd'
-        ),
+        cabecalhos.indexOf('qtd_compra_convertida'),
 
       qtdOriginal:
-        cabecalhos.indexOf(
-          'qtd_original'
-        ),
+        cabecalhos.indexOf('qtd_original_compra'),
 
       fatorAplicado:
         cabecalhos.indexOf(
@@ -975,14 +967,14 @@ function atualizarConversoesPendentes_() {
 
     const unidade =
       String(
-        item.unidade || ''
+        item.unidade_compra || ''
       )
         .trim()
         .toUpperCase();
 
     const qtdUnidade =
       Number(
-        item.qtd_unidade || 0
+        item.unidades_por_embalagem || 0
       );
 
     /*
@@ -995,8 +987,8 @@ function atualizarConversoesPendentes_() {
      */
     const qtdOriginal =
       Number(
-        item.qtd_original ||
-        item.qtd ||
+        item.qtd_original_compra ||
+        item.qtd_compra_convertida ||
         0
       );
 

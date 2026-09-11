@@ -505,7 +505,7 @@ function prepararComprasPeriodo_(periodo) {
         fornecedor: item.fornecedor,
         produto_cod: limparCodigo_(item.produto_cod),
         produto: item.produto,
-        qtd: parseNumero(item.qtd),
+        qtd: parseNumero(item.qtd_compra_convertida),
         valor_total: parseNumero(item.valor_total),
         operacao: String(item.operacao || '').trim()
       };

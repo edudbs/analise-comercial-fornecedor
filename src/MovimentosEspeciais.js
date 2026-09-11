@@ -20,7 +20,7 @@ function atualizarMovimentosEspeciais() {
       item.produto_cod,
       item.produto,
       item.operacao,
-      parseNumero(item.qtd),
+      parseNumero(item.qtd_compra_convertida),
       parseNumero(item.valor_total)
     ]));
 

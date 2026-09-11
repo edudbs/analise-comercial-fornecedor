@@ -28,16 +28,16 @@ function migrarQuantidadeOriginalCompras() {
     );
 
   const idxUnidade =
-    cabecalhos.indexOf('unidade');
+    cabecalhos.indexOf('unidade_compra');
 
   const idxQtdUnidade =
-    cabecalhos.indexOf('qtd_unidade');
+    cabecalhos.indexOf('unidades_por_embalagem');
 
   const idxQtd =
-    cabecalhos.indexOf('qtd');
+    cabecalhos.indexOf('qtd_compra_convertida');
 
   const idxQtdOriginal =
-    cabecalhos.indexOf('qtd_original');
+    cabecalhos.indexOf('qtd_original_compra');
 
   const idxFator =
     cabecalhos.indexOf(
