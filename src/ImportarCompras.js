@@ -250,6 +250,14 @@ function processarCsvCompras(conteudoCsv) {
         qtdUnidade,
 
         /*
+         * Quantidade real de unidades comerciais
+         * por embalagem apÃ³s validaÃ§Ã£o.
+         * Fica vazia quando a conversÃ£o ainda
+         * estiver pendente.
+         */
+        conversao.unidadesPorEmbalagemCorrigida,
+
+        /*
          * Quantidade normalizada para
          * comparação com vendas.
          */
@@ -307,6 +315,7 @@ function resolverConversaoCompra_(dados) {
     return {
       qtdAnalise: qtdItens,
       fator: 1,
+      unidadesPorEmbalagemCorrigida: 1,
       origem: 'NATIVO',
       status: 'VALIDADO'
     };
@@ -333,6 +342,11 @@ function resolverConversaoCompra_(dados) {
       qtdAnalise,
 
       fator:
+        aplicarFator
+          ? qtdUnidade
+          : 1,
+
+      unidadesPorEmbalagemCorrigida:
         aplicarFator
           ? qtdUnidade
           : 1,
@@ -365,6 +379,9 @@ function resolverConversaoCompra_(dados) {
       fator:
         qtdUnidade,
 
+      unidadesPorEmbalagemCorrigida:
+        qtdUnidade,
+
       origem:
         'AUTOMATICO',
 
@@ -394,7 +411,8 @@ function resolverConversaoCompra_(dados) {
     conversaoManual &&
     conversaoManual.status ===
       'VALIDADO' &&
-    conversaoManual.fator > 0
+    conversaoManual.fator > 0 &&
+    conversaoManual.unidadesPorEmbalagemCorrigida > 0
   ) {
     return {
       qtdAnalise:
@@ -403,6 +421,9 @@ function resolverConversaoCompra_(dados) {
 
       fator:
         conversaoManual.fator,
+
+      unidadesPorEmbalagemCorrigida:
+        conversaoManual.unidadesPorEmbalagemCorrigida,
 
       origem:
         conversaoManual.origem ||
@@ -425,6 +446,7 @@ function resolverConversaoCompra_(dados) {
   return {
     qtdAnalise: qtdItens,
     fator: 1,
+    unidadesPorEmbalagemCorrigida: '',
     origem: '',
     status: 'PENDENTE'
   };
@@ -498,6 +520,11 @@ function carregarMapaConversaoUnidade_() {
         'unidade_compra'
       ),
 
+    unidadesPorEmbalagemCorrigida:
+      cabecalhos.indexOf(
+        'unidades_por_embalagem_corrigida'
+      ),
+
     fatorConversao:
       cabecalhos.indexOf(
         'fator_conversao'
@@ -517,13 +544,14 @@ function carregarMapaConversaoUnidade_() {
   if (
     idx.produtoCod === -1 ||
     idx.unidadeCompra === -1 ||
+    idx.unidadesPorEmbalagemCorrigida === -1 ||
     idx.fatorConversao === -1 ||
     idx.status === -1
   ) {
     throw new Error(
       'Cabeçalho inválido na aba MAPA_CONVERSAO_UNIDADE.\n\n' +
       'Esperado:\n' +
-      'produto_cod | produto | unidade_compra | fator_conversao | origem | status | observacao'
+      'produto_cod | produto | unidade_compra | unidades_por_embalagem_corrigida | fator_conversao | origem | status | observacao'
     );
   }
 
@@ -543,6 +571,11 @@ function carregarMapaConversaoUnidade_() {
         )
           .trim()
           .toUpperCase();
+
+      const unidadesPorEmbalagemCorrigida =
+        parseNumero(
+          linha[idx.unidadesPorEmbalagemCorrigida]
+        );
 
       const fator =
         parseNumero(
@@ -568,6 +601,7 @@ function carregarMapaConversaoUnidade_() {
       if (
         !produtoCod ||
         !unidade ||
+        unidadesPorEmbalagemCorrigida <= 0 ||
         fator <= 0
       ) {
         return;
@@ -581,6 +615,7 @@ function carregarMapaConversaoUnidade_() {
 
       mapa[chave] = {
         fator,
+        unidadesPorEmbalagemCorrigida,
         origem:
           origem || 'MANUAL',
         status
@@ -705,6 +740,9 @@ function reprocessarConversoesCompras() {
       qtdUnidade:
         cabecalhos.indexOf('unidades_por_embalagem'),
 
+      qtdUnidadeCorrigida:
+        cabecalhos.indexOf('unidades_por_embalagem_corrigida'),
+
       qtd:
         cabecalhos.indexOf('qtd_compra_convertida'),
 
@@ -734,6 +772,7 @@ function reprocessarConversoesCompras() {
     let totalAlterados = 0;
     let totalPendentes = 0;
 
+    const novasUnidadesCorrigidas = [];
     const novasQuantidades = [];
     const novosFatores = [];
 
@@ -755,6 +794,10 @@ function reprocessarConversoesCompras() {
         );
 
       if (linhaVazia) {
+        novasUnidadesCorrigidas.push([
+          linha[idx.qtdUnidadeCorrigida]
+        ]);
+
         novasQuantidades.push([
           linha[idx.qtd]
         ]);
@@ -795,6 +838,11 @@ function reprocessarConversoesCompras() {
           linha[idx.qtdOriginal] || 0
         );
 
+      const unidadeCorrigidaAtual =
+        linha[idx.qtdUnidadeCorrigida] === ''
+          ? ''
+          : Number(linha[idx.qtdUnidadeCorrigida]);
+
       const qtdAtual =
         Number(
           linha[idx.qtd] || 0
@@ -829,11 +877,18 @@ function reprocessarConversoesCompras() {
           ? conversao.fator
           : 1;
 
+      const novaUnidadeCorrigida =
+        conversao.unidadesPorEmbalagemCorrigida === ''
+          ? ''
+          : Number(conversao.unidadesPorEmbalagemCorrigida);
+
       if (
         Number(novaQtd) !==
           Number(qtdAtual) ||
         Number(novoFator) !==
-          Number(fatorAtual)
+          Number(fatorAtual) ||
+        String(novaUnidadeCorrigida) !==
+          String(unidadeCorrigidaAtual)
       ) {
         totalAlterados++;
       }
@@ -844,6 +899,10 @@ function reprocessarConversoesCompras() {
       ) {
         totalPendentes++;
       }
+
+      novasUnidadesCorrigidas.push([
+        novaUnidadeCorrigida
+      ]);
 
       novasQuantidades.push([
         novaQtd
@@ -863,6 +922,17 @@ function reprocessarConversoesCompras() {
      *
      * qtd_original nunca é alterada.
      */
+    aba
+      .getRange(
+        2,
+        idx.qtdUnidadeCorrigida + 1,
+        novasUnidadesCorrigidas.length,
+        1
+      )
+      .setValues(
+        novasUnidadesCorrigidas
+      );
+
     aba
       .getRange(
         2,
@@ -1043,7 +1113,8 @@ function atualizarConversoesPendentes_() {
       manual &&
       manual.status ===
         'VALIDADO' &&
-      manual.fator > 0
+      manual.fator > 0 &&
+      manual.unidadesPorEmbalagemCorrigida > 0
     ) {
       return;
     }
