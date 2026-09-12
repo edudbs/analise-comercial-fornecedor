@@ -18,10 +18,12 @@ function onOpen() {
     .addSeparator()
     
     .addItem('8. Reprocessar conversões de compras', 'reprocessarConversoesCompras')
+
+    .addItem('9. Detalhar histórico de compras', 'abrirHistoricoComprasSidebar')
     
     .addSeparator()
 
-    .addItem('9. Limpar Bases', 'limparBases')
+    .addItem('10. Limpar Bases', 'limparBases')
 
     .addToUi();
 
@@ -62,6 +64,14 @@ function limparBases() {
   limparAbaMantendoCabecalho_('ANALISE_SKU_CONSOLIDADA');
   limparAbaMantendoCabecalho_('ANALISE_FORNECEDOR');
   limparAbaMantendoCabecalho_('ANALISE_FORNECEDOR_SKU');
+
+  const abaRitmo = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName('ANALISE_RITMO_COMPRAS');
+
+  if (abaRitmo) {
+    limparAbaMantendoCabecalho_('ANALISE_RITMO_COMPRAS');
+  }
 
   limparAbaMantendoCabecalho_('VENDAS_SEM_COMPRA');
   limparAbaMantendoCabecalho_('MOVIMENTOS_ESPECIAIS');
