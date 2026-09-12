@@ -2,6 +2,11 @@
 
 A principal visão operacional atual é `ANALISE_FORNECEDOR_SKU`.
 
+`ANALISE_RITMO_COMPRAS` complementa essa visão com datas, frequência e
+tamanho dos eventos de compra. Bonificações e devoluções não contam como
+eventos de compra. Compras normais do mesmo fornecedor e produto na mesma
+data de entrada formam um único evento.
+
 ## Quantidades e movimentos
 
 ### qtd_compra
