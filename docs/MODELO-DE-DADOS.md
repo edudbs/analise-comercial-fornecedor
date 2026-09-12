@@ -197,6 +197,30 @@ rank_venda
 rank_lucro
 ```
 
+## ANALISE_RITMO_COMPRAS
+
+Visão temporal por fornecedor e produto econômico. Cada evento de compra
+corresponde às compras normais do mesmo fornecedor e produto recebidas na
+mesma `data_entrada`.
+
+```text
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+primeira_compra
+ultima_compra
+dias_sem_comprar
+eventos_compra
+intervalo_medio_dias
+qtd_media_por_compra
+qtd_ultima_compra
+valor_ultima_compra
+cobertura_dias
+cobertura_intervalo
+status_ritmo
+```
+
 ## ANALISE_SKU_CONSOLIDADA
 
 ```text
