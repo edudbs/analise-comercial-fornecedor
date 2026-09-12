@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; color: #1f2937; padding: 12px; }
+      h2 { font-size: 18px; margin: 0 0 4px; }
+      .subtitulo { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
+      .filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px; }
+      input[type="text"] { box-sizing: border-box; width: 100%; padding: 7px; border: 1px solid #d1d5db; border-radius: 5px; }
+      .check { margin: 10px 0; font-size: 12px; }
+      button { width: 100%; padding: 9px; border: 0; border-radius: 5px; background: #2563eb; color: white; cursor: pointer; }
+      .erro { color: #b91c1c; font-size: 12px; margin-top: 10px; }
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 14px 0; }
+      .card { background: #f3f4f6; border-radius: 6px; padding: 8px; }
+      .card span { display: block; color: #6b7280; font-size: 10px; }
+      .card strong { display: block; font-size: 13px; margin-top: 3px; }
+      .status { grid-column: 1 / -1; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th, td { border-bottom: 1px solid #e5e7eb; padding: 6px 3px; text-align: left; }
+      th { position: sticky; top: 0; background: white; }
+      .numero { text-align: right; }
+      .vazio { color: #6b7280; font-size: 12px; padding: 12px 0; }
+    </style>
+  </head>
+  <body>
+    <h2 id="produto">Carregando...</h2>
+    <div class="subtitulo" id="fornecedor"></div>
+
+    <div class="filtros">
+      <div><label>Data inicial</label><input id="dataInicial" type="text" placeholder="dd/mm/aaaa"></div>
+      <div><label>Data final</label><input id="dataFinal" type="text" placeholder="dd/mm/aaaa"></div>
+    </div>
+    <div class="check">
+      <label><input id="incluirMovimentos" type="checkbox"> Incluir bonificações e devoluções</label>
+    </div>
+    <button onclick="consultar()">Atualizar visualização</button>
+    <div class="erro" id="erro"></div>
+    <div id="resultado"></div>
+
+    <script>
+      let contexto = null;
+
+      google.script.run
+        .withSuccessHandler(inicializar)
+        .withFailureHandler(exibirErro)
+        .obterContextoHistoricoComprasSelecionado();
+
+      function inicializar(dados) {
+        contexto = dados;
+        document.getElementById('produto').textContent = dados.produto_cod + ' — ' + dados.produto;
+        document.getElementById('fornecedor').textContent = dados.fornecedor_cod + ' — ' + dados.fornecedor;
+        document.getElementById('dataInicial').value = dados.data_inicial;
+        document.getElementById('dataFinal').value = dados.data_final;
+        consultar();
+      }
+
+      function consultar() {
+        if (!contexto) return;
+        document.getElementById('erro').textContent = '';
+        document.getElementById('resultado').innerHTML = '<div class="vazio">Consultando...</div>';
+
+        google.script.run
+          .withSuccessHandler(renderizar)
+          .withFailureHandler(exibirErro)
+          .consultarHistoricoCompras({
+            fornecedor_cod: contexto.fornecedor_cod,
+            produto_cod: contexto.produto_cod,
+            data_inicial: document.getElementById('dataInicial').value,
+            data_final: document.getElementById('dataFinal').value,
+            incluir_movimentos: document.getElementById('incluirMovimentos').checked
+          });
+      }
+
+      function renderizar(dados) {
+        if (!dados.resumo) {
+          document.getElementById('resultado').innerHTML = '<div class="vazio">Nenhuma compra normal encontrada no período.</div>';
+          return;
+        }
+
+        const r = dados.resumo;
+        const cards = [
+          ['Primeira compra', r.primeira_compra],
+          ['Última compra', r.ultima_compra],
+          ['Dias sem comprar', r.dias_sem_comprar],
+          ['Eventos de compra', r.eventos_compra],
+          ['Intervalo médio', formatarNumero(r.intervalo_medio_dias) + ' dias'],
+          ['Qtd. média/evento', formatarNumero(r.qtd_media_por_compra)],
+          ['Cobertura estimada', formatarNumero(r.cobertura_dias) + ' dias'],
+          ['Cobertura ÷ intervalo', formatarNumero(r.cobertura_intervalo)],
+          ['Status do ritmo', r.status_ritmo, 'status']
+        ];
+
+        let html = '<div class="cards">' + cards.map(card =>
+          '<div class="card ' + (card[2] || '') + '"><span>' + card[0] + '</span><strong>' + card[1] + '</strong></div>'
+        ).join('') + '</div>';
+
+        html += '<table><thead><tr><th>Data</th><th>Nota</th><th>Operação</th><th class="numero">Qtd.</th><th class="numero">Valor</th></tr></thead><tbody>';
+        html += dados.movimentos.map(item =>
+          '<tr><td>' + item.data + '</td><td>' + escapar(item.nota) + '</td><td>' + escapar(item.operacao) + '</td><td class="numero">' + formatarNumero(item.qtd) + '</td><td class="numero">' + formatarMoeda(item.valor) + '</td></tr>'
+        ).join('');
+        html += '</tbody></table>';
+        document.getElementById('resultado').innerHTML = html;
+      }
+
+      function exibirErro(erro) {
+        document.getElementById('resultado').innerHTML = '';
+        document.getElementById('erro').textContent = erro.message || String(erro);
+      }
+
+      function formatarNumero(valor) {
+        return Number(valor || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      }
+
+      function formatarMoeda(valor) {
+        return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+
+      function escapar(valor) {
+        const div = document.createElement('div');
+        div.textContent = valor == null ? '' : String(valor);
+        return div.innerHTML;
+      }
+    </script>
+  </body>
+</html>
