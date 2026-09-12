@@ -50,6 +50,8 @@ const analiseFornecedor = gerarAnaliseFornecedor_(analiseSku);
 
     atualizarAnaliseFornecedorSku();
 
+    atualizarAnaliseRitmoCompras();
+
     ui.alert(
       'Análises atualizadas com sucesso.\n' +
       `SKUs analisados: ${analiseSku.length}\n` +
@@ -1810,3 +1812,1250 @@ function definirAcaoSugerida_(
 
   return 'ANALISAR';
 }
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+
+  ui
+    .createMenu('Análise Comercial')
+
+    .addItem('1. Importar Compras do Drive', 'importarComprasDoDrive')
+    .addItem('2. Importar Vendas do Drive', 'importarVendasDoDrive')
+    .addItem('3. Importar Tudo', 'importarTudoDoDrive')
+
+    .addSeparator()
+
+    .addItem('4. Atualizar Análises', 'atualizarAnalises')
+    .addItem('5. Atualizar Auditoria', 'atualizarAuditoria')
+    .addItem('6. Atualizar Dashboard', 'atualizarDashboard')
+    .addItem('7. Atualizar Movimentos Especiais', 'atualizarMovimentosEspeciais')
+
+    .addSeparator()
+    
+    .addItem('8. Reprocessar conversões de compras', 'reprocessarConversoesCompras')
+
+    .addItem('9. Detalhar histórico de compras', 'abrirHistoricoComprasSidebar')
+    
+    .addSeparator()
+
+    .addItem('10. Limpar Bases', 'limparBases')
+
+    .addToUi();
+
+
+  ui
+    .createMenu('Instruções')
+
+    .addItem(
+      'Parâmetros dos Relatórios',
+      'abrirInstrucoesRelatorios_'
+    )
+
+    .addToUi();
+}
+
+
+function importarTudoDoDrive() {
+  importarComprasDoDrive();
+  importarVendasDoDrive();
+}
+
+
+function limparBases() {
+  const ui = SpreadsheetApp.getUi();
+
+  const resposta = ui.alert(
+    'Limpar bases',
+    'Isso apagará os dados importados e as análises geradas, mantendo os cabeçalhos. Deseja continuar?',
+    ui.ButtonSet.YES_NO
+  );
+
+  if (resposta !== ui.Button.YES) return;
+
+  limparAbaMantendoCabecalho_('COMPRAS_RAW');
+  limparAbaMantendoCabecalho_('VENDAS_RAW');
+
+  limparAbaMantendoCabecalho_('ANALISE_SKU');
+  limparAbaMantendoCabecalho_('ANALISE_SKU_CONSOLIDADA');
+  limparAbaMantendoCabecalho_('ANALISE_FORNECEDOR');
+  limparAbaMantendoCabecalho_('ANALISE_FORNECEDOR_SKU');
+
+  const abaRitmo = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName('ANALISE_RITMO_COMPRAS');
+
+  if (abaRitmo) {
+    limparAbaMantendoCabecalho_('ANALISE_RITMO_COMPRAS');
+  }
+
+  limparAbaMantendoCabecalho_('VENDAS_SEM_COMPRA');
+  limparAbaMantendoCabecalho_('MOVIMENTOS_ESPECIAIS');
+
+  limparAbaMantendoCabecalho_('AUDITORIA');
+  limparAbaMantendoCabecalho_('DASHBOARD');
+
+  ui.alert('Bases e análises limpas com sucesso.');
+}
+
+
+function limparAbaMantendoCabecalho_(nomeAba) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const aba = ss.getSheetByName(nomeAba);
+
+  if (!aba) {
+    throw new Error('Aba não encontrada: ' + nomeAba);
+  }
+
+  const ultimaLinha = aba.getLastRow();
+  const ultimaColuna = aba.getLastColumn();
+
+  if (ultimaLinha <= 1) return;
+
+  aba
+    .getRange(
+      2,
+      1,
+      ultimaLinha - 1,
+      ultimaColuna
+    )
+    .clearContent();
+}
+
+
+function abrirInstrucoesRelatorios_() {
+  const html = HtmlService.createHtmlOutput(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <base target="_top">
+
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            color: #1f2937;
+            line-height: 1.5;
+          }
+
+          h2 {
+            margin-top: 0;
+            color: #111827;
+          }
+
+          h3 {
+            margin-top: 24px;
+            margin-bottom: 8px;
+            color: #1f2937;
+          }
+
+          .caminho {
+            background: #f3f4f6;
+            padding: 10px 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            font-weight: bold;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+
+          th,
+          td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+            vertical-align: top;
+          }
+
+          th {
+            background: #f9fafb;
+          }
+
+          .alerta {
+            margin-top: 20px;
+            padding: 12px;
+            background: #fff7ed;
+            border-left: 4px solid #f97316;
+          }
+
+          .acoes {
+            text-align: right;
+            margin-top: 20px;
+          }
+
+          button {
+            padding: 8px 16px;
+            cursor: pointer;
+          }
+        </style>
+      </head>
+
+      <body>
+
+        <h2>Parâmetros dos Relatórios — Varejo Fácil</h2>
+
+        <h3>1. Compras</h3>
+
+        <div class="caminho">
+          Varejo Fácil &gt; Compra &gt; Nota Fiscal Entrada
+        </div>
+
+        <table>
+          <tr>
+            <th>Parâmetro</th>
+            <th>Configuração</th>
+          </tr>
+
+          <tr>
+            <td>Fornecedor</td>
+            <td>Fornecedor da análise</td>
+          </tr>
+
+          <tr>
+            <td>Data</td>
+            <td><strong>Entrada</strong></td>
+          </tr>
+
+          <tr>
+            <td>Formato</td>
+            <td>☑ Analítico</td>
+          </tr>
+
+          <tr>
+            <td>Situações</td>
+            <td>☑ Efetivada (EFT)</td>
+          </tr>
+
+          <tr>
+            <td>Exibição</td>
+            <td><strong>CSV</strong></td>
+          </tr>
+        </table>
+
+
+        <h3>2. Vendas</h3>
+
+        <div class="caminho">
+          Varejo Fácil &gt; Venda &gt; ABC Venda
+        </div>
+
+        <table>
+          <tr>
+            <th>Parâmetro</th>
+            <th>Configuração</th>
+          </tr>
+
+          <tr>
+            <td>Período</td>
+            <td>Período Inicial / Período Final</td>
+          </tr>
+
+          <tr>
+            <td>Fornecedor</td>
+            <td>Fornecedor da análise</td>
+          </tr>
+
+          <tr>
+            <td>Quebra (nível 1)</td>
+            <td><strong>Data</strong></td>
+          </tr>
+
+          <tr>
+            <td>Opções</td>
+            <td>
+              ☑ Classifica ABC<br>
+              ☑ Considerar fornecedor secundário
+            </td>
+          </tr>
+
+          <tr>
+            <td>Exibição</td>
+            <td><strong>CSV</strong></td>
+          </tr>
+        </table>
+
+
+        <h3>3. Salvamento dos arquivos</h3>
+
+        <div class="caminho">
+          Google Drive &gt; Importados
+        </div>
+
+        <table>
+          <tr>
+            <th>Relatório</th>
+            <th>Salvar em</th>
+          </tr>
+
+          <tr>
+            <td>Compras</td>
+            <td><strong>Importados &gt; Compras</strong></td>
+          </tr>
+
+          <tr>
+            <td>Vendas</td>
+            <td><strong>Importados &gt; Vendas</strong></td>
+          </tr>
+        </table>
+
+        <div class="alerta">
+          <strong>Importante:</strong>
+          os arquivos CSV devem ser salvos diretamente na raiz das
+          respectivas pastas Compras ou Vendas. Não colocar os arquivos
+          em subpastas.
+        </div>
+
+        <div class="alerta">
+          <strong>Atenção:</strong>
+          confira se os relatórios de Compras e Vendas correspondem
+          ao fornecedor e período que serão analisados antes da importação.
+        </div>
+
+        <div class="acoes">
+          <button onclick="google.script.host.close()">
+            Fechar
+          </button>
+        </div>
+
+      </body>
+    </html>
+  `)
+    .setWidth(650)
+    .setHeight(650);
+
+  SpreadsheetApp
+    .getUi()
+    .showModalDialog(
+      html,
+      'Instruções — Relatórios Varejo Fácil'
+    );
+}
+# Indicadores
+
+A principal visão operacional atual é `ANALISE_FORNECEDOR_SKU`.
+
+`ANALISE_RITMO_COMPRAS` complementa essa visão com datas, frequência e
+tamanho dos eventos de compra. Bonificações e devoluções não contam como
+eventos de compra. Compras normais do mesmo fornecedor e produto na mesma
+data de entrada formam um único evento.
+
+## Quantidades e movimentos
+
+### qtd_compra
+Quantidade comprada em operações normais, já normalizada para a unidade comercial de análise.
+
+### qtd_bonificacao
+Quantidade recebida sem compor a compra normal.
+
+### qtd_devolucao
+Quantidade devolvida. É apresentada separadamente porque a devolução pode se referir a compras anteriores ao período.
+
+### qtd_disponibilizada
+Relação líquida dos movimentos de entrada considerados na janela:
+
+```text
+qtd_compra + qtd_bonificacao - qtd_devolucao
+```
+
+### qtd_venda
+Quantidade vendida vinculada ao SKU/fornecedor conforme as regras de atribuição do projeto.
+
+## Valores
+
+### valor_compra
+Valor financeiro das compras normais, baseado no `Valor total do item` importado.
+
+### valor_bonificacao
+Valor informativo das bonificações.
+
+### valor_devolucao
+Valor das devoluções.
+
+### valor_venda
+Faturamento atribuído ao SKU/fornecedor.
+
+### valor_venda_media_un
+Valor médio de venda por unidade.
+
+## Custos e resultado
+
+### custo_medio
+Custo médio das unidades compradas normalmente.
+
+### custo_efetivo
+Custo ajustado pelo efeito das bonificações. Quando há bonificação, o mesmo valor de compra é distribuído por uma quantidade maior de unidades disponíveis.
+
+### custo_venda
+Custo estimado das unidades efetivamente vendidas com base no custo efetivo.
+
+### lucro
+
+```text
+valor_venda - custo_venda
+```
+
+### margem
+
+```text
+lucro / valor_venda
+```
+
+## Ritmo e capital
+
+### faturamento_dia
+Faturamento médio por dia no período.
+
+### qtd_venda_media_dia
+Quantidade média vendida por dia.
+
+### saldo_movimentacao
+Diferença entre quantidade disponibilizada e quantidade vendida dentro da janela analisada.
+
+Não representa necessariamente estoque físico atual.
+
+### saldo_periodo_valor
+Estimativa do valor associado ao saldo de movimentação do período.
+
+### cobertura_dias
+Quantidade de dias que o saldo de movimentação representaria no ritmo médio de venda do período.
+
+Como ainda não há estoque inicial/físico integrado, deve ser interpretada como indicador operacional da janela, não como cobertura física exata.
+
+### indice_aproveitamento
+Percentual da quantidade disponibilizada que foi vendida no período.
+
+### giro
+Indicador da relação entre vendas e quantidade disponibilizada conforme a regra implementada no projeto.
+
+## ABC
+
+`classe_abc` classifica o SKU pela participação acumulada no faturamento:
+
+- A: primeiros 80%;
+- B: próximos 15%;
+- C: últimos 5%.
+
+## Status operacional
+
+Referência atual:
+
+- `RUPTURA`: cobertura até 7 dias;
+- `ATENCAO`: 8 a 15 dias;
+- `SAUDAVEL`: 16 a 30 dias;
+- `EXCESSO`: acima de 30 dias;
+- `SEM_GIRO`: ausência de venda.
+
+`CONVERSAO_PENDENTE` tem precedência quando a unidade de compra ainda não foi validada.
+
+## Status financeiro
+
+Referência atual:
+
+- `MARGEM_MUITO_BAIXA`: até 10%;
+- `MARGEM_BAIXA`: 11% a 19%;
+- `MARGEM_NORMAL`: 20% a 35%;
+- `MARGEM_ALTA`: acima de 35%.
+
+## Ação sugerida
+
+`acao_sugerida` transforma os diagnósticos em orientação operacional. Para conversão não validada, a ação deve ser `VALIDAR_CONVERSAO` antes de qualquer decisão de compra baseada no giro/cobertura.
+
+## Regra de interpretação
+
+Nenhum indicador deve ser interpretado isoladamente. Compra, venda, margem, cobertura, bonificações, devoluções, conversão de embalagem e existência de estoque anterior precisam ser considerados em conjunto.
+# Modelo de Dados
+
+Este documento registra a estrutura lógica conhecida das principais abas. Cabeçalhos devem ser mantidos sincronizados com o código Apps Script.
+
+## COMPRAS_RAW
+
+Estrutura alvo aprovada para a próxima migração:
+
+```text
+data_emissao
+data_entrada
+nota
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+unidade_compra
+unidades_por_embalagem
+qtd_compra_convertida
+custo_unit
+valor_total
+operacao
+qtd_original_compra
+fator_conversao_aplicado
+```
+
+Observação: esta nomenclatura é a estrutura alvo. A migração do código e da planilha deve ocorrer de forma controlada para não quebrar rotinas que ainda leem os nomes anteriores.
+
+## VENDAS_RAW
+
+```text
+data_venda
+produto_cod
+produto
+qtd
+faturamento
+preco_medio
+custo_total
+lucro
+margem
+```
+
+## MOVIMENTOS_ESPECIAIS
+
+```text
+data_entrada
+nota
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+operacao
+qtd
+valor_total
+```
+
+## MAPA_CONVERSAO_UNIDADE
+
+```text
+produto_cod
+produto
+unidade_compra
+fator_conversao
+origem
+status
+observacao
+```
+
+Chave lógica: `produto_cod + unidade_compra`.
+
+## CONVERSOES_PENDENTES
+
+```text
+produto_cod
+produto
+unidade_compra
+qtd_unidade
+qtd_compra
+valor_compra
+qtd_venda
+custo_unitario_venda
+fator_estimado
+status
+```
+
+Esta é uma fila derivada e pode ser regenerada.
+
+## MAPA_PRODUTO_ANALISE
+
+```text
+produto_cod
+produto
+produto_analise_cod
+produto_analise
+```
+
+Permite consolidar SKUs físicos distintos no mesmo produto econômico.
+
+## MAPA_SKU_ESPECIAL
+
+```text
+produto_cod
+produto
+tipo_sku
+observacao
+```
+
+Usado para regras especiais, incluindo SKU compartilhado entre fornecedores.
+
+## ANALISE_SKU
+
+```text
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+secao
+grupo
+qtd_compra
+valor_compra
+qtd_bonificacao
+valor_bonificacao
+qtd_disponibilizada
+qtd_venda
+valor_venda
+qtd_devolucao
+valor_devolucao
+custo_medio
+custo_efetivo
+custo_venda
+lucro
+margem
+saldo_movimentacao
+indice_aproveitamento
+giro
+status
+```
+
+## ANALISE_FORNECEDOR_SKU
+
+```text
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+qtd_compra
+valor_compra
+qtd_bonificacao
+valor_bonificacao
+qtd_disponibilizada
+qtd_venda
+valor_venda
+qtd_devolucao
+valor_devolucao
+custo_medio
+custo_efetivo
+custo_venda
+valor_venda_media_un
+lucro
+margem
+faturamento_dia
+classe_abc
+saldo_movimentacao
+saldo_periodo_valor
+qtd_venda_media_dia
+cobertura_dias
+indice_aproveitamento
+giro
+status
+status_operacional
+status_financeiro
+acao_sugerida
+```
+
+## ANALISE_FORNECEDOR
+
+```text
+fornecedor_cod
+fornecedor
+qtd_skus
+qtd_compra
+valor_compra
+qtd_bonificacao
+valor_bonificacao
+qtd_disponibilizada
+qtd_venda
+valor_venda
+qtd_devolucao
+valor_devolucao
+custo_venda
+lucro
+margem
+giro
+part_compra
+part_venda
+rank_venda
+rank_lucro
+```
+
+## ANALISE_RITMO_COMPRAS
+
+Visão temporal por fornecedor e produto econômico. Cada evento de compra
+corresponde às compras normais do mesmo fornecedor e produto recebidas na
+mesma `data_entrada`.
+
+```text
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+primeira_compra
+ultima_compra
+dias_sem_comprar
+eventos_compra
+intervalo_medio_dias
+qtd_media_por_compra
+qtd_ultima_compra
+valor_ultima_compra
+cobertura_dias
+cobertura_intervalo
+status_ritmo
+```
+
+## ANALISE_SKU_CONSOLIDADA
+
+```text
+produto_cod
+produto
+qtd_fornecedores
+qtd_compra
+valor_compra
+qtd_bonificacao
+valor_bonificacao
+qtd_disponibilizada
+qtd_venda
+valor_venda
+qtd_devolucao
+valor_devolucao
+custo_medio
+custo_efetivo
+custo_venda
+lucro
+margem
+saldo_movimentacao
+indice_aproveitamento
+giro
+fornecedor_principal
+part_fornecedor_principal
+status
+```
+
+## Abas permanentes versus regeneráveis
+
+Permanentes/configuração:
+
+- `MAPA_PRODUTO_ANALISE`
+- `MAPA_SKU_ESPECIAL`
+- `MAPA_CONVERSAO_UNIDADE`
+
+Regeneráveis/importadas:
+
+- `COMPRAS_RAW`
+- `VENDAS_RAW`
+- `MOVIMENTOS_ESPECIAIS`
+- `CONVERSOES_PENDENTES`
+- `VENDAS_SEM_COMPRA`
+- abas `ANALISE_*`
+- `AUDITORIA`
+- `DASHBOARD`.
+const CABECALHOS_RITMO_COMPRAS_ = [
+  'fornecedor_cod',
+  'fornecedor',
+  'produto_cod',
+  'produto',
+  'primeira_compra',
+  'ultima_compra',
+  'dias_sem_comprar',
+  'eventos_compra',
+  'intervalo_medio_dias',
+  'qtd_media_por_compra',
+  'qtd_ultima_compra',
+  'valor_ultima_compra',
+  'cobertura_dias',
+  'cobertura_intervalo',
+  'status_ritmo'
+];
+
+
+function atualizarAnaliseRitmoCompras() {
+  const periodo = obterPeriodoAnalise();
+  const mapaProdutoAnalise = carregarMapaProdutoAnalise_();
+  const compras = aplicarMapaProdutoAnalise_(
+    prepararComprasRitmoPeriodo_(periodo),
+    mapaProdutoAnalise
+  );
+  const coberturaPorChave = carregarCoberturaFornecedorSku_();
+  const eventosPorChave = agruparEventosCompraPorDia_(compras);
+
+  const resultado = Object.keys(eventosPorChave)
+    .map(chave => montarResumoRitmoCompra_(
+      eventosPorChave[chave],
+      coberturaPorChave[chave],
+      periodo
+    ))
+    .sort((a, b) => {
+      const fornecedor = a.fornecedor.localeCompare(b.fornecedor);
+      return fornecedor || a.produto.localeCompare(b.produto);
+    });
+
+  escreverAnaliseRitmoCompras_(resultado);
+  return resultado;
+}
+
+
+function prepararComprasRitmoPeriodo_(periodo) {
+  return lerDados('COMPRAS_RAW')
+    .map(item => ({
+      data: parseData(item.data_entrada || item.data_emissao),
+      nota: String(item.nota || '').trim(),
+      fornecedor_cod: limparCodigo_(item.fornecedor_cod),
+      fornecedor: String(item.fornecedor || '').trim(),
+      produto_cod: limparCodigo_(item.produto_cod),
+      produto: String(item.produto || '').trim(),
+      qtd: parseNumero(item.qtd_compra_convertida),
+      valor_total: parseNumero(item.valor_total),
+      operacao: String(item.operacao || '').trim()
+    }))
+    .filter(item =>
+      dataDentroDoPeriodo(item.data, periodo) &&
+      item.fornecedor_cod &&
+      item.produto_cod
+    );
+}
+
+
+function carregarCoberturaFornecedorSku_() {
+  const mapa = {};
+
+  lerDados('ANALISE_FORNECEDOR_SKU').forEach(item => {
+    const chave = criarChaveFornecedorSku_(
+      item.fornecedor_cod,
+      item.produto_cod
+    );
+
+    mapa[chave] = {
+      cobertura_dias: parseNumero(item.cobertura_dias),
+      status_operacional: String(item.status_operacional || '').trim()
+    };
+  });
+
+  return mapa;
+}
+
+
+function agruparEventosCompraPorDia_(compras) {
+  const mapa = {};
+
+  compras.forEach(item => {
+    if (classificarOperacaoCompra_(item.operacao) !== 'COMPRA') return;
+
+    const chave = criarChaveFornecedorSku_(
+      item.fornecedor_cod,
+      item.produto_cod
+    );
+
+    if (!mapa[chave]) {
+      mapa[chave] = {
+        fornecedor_cod: item.fornecedor_cod,
+        fornecedor: item.fornecedor,
+        produto_cod: item.produto_cod,
+        produto: item.produto,
+        eventos: {}
+      };
+    }
+
+    const dataChave = formatarDataChave_(item.data);
+
+    if (!mapa[chave].eventos[dataChave]) {
+      mapa[chave].eventos[dataChave] = {
+        data: new Date(item.data),
+        qtd: 0,
+        valor: 0,
+        notas: {}
+      };
+    }
+
+    const evento = mapa[chave].eventos[dataChave];
+    evento.qtd += item.qtd;
+    evento.valor += item.valor_total;
+    if (item.nota) evento.notas[item.nota] = true;
+  });
+
+  return mapa;
+}
+
+
+function montarResumoRitmoCompra_(grupo, cobertura, periodo) {
+  const eventos = Object.values(grupo.eventos)
+    .sort((a, b) => a.data - b.data);
+  const intervalos = [];
+
+  for (let indice = 1; indice < eventos.length; indice += 1) {
+    intervalos.push(diferencaDias_(
+      eventos[indice - 1].data,
+      eventos[indice].data
+    ));
+  }
+
+  const intervaloMedio = intervalos.length
+    ? media_(intervalos)
+    : 0;
+  const primeiraCompra = eventos[0];
+  const ultimaCompra = eventos[eventos.length - 1];
+  const qtdTotal = eventos.reduce((soma, evento) => soma + evento.qtd, 0);
+  const coberturaDias = cobertura ? cobertura.cobertura_dias : 0;
+  const coberturaIntervalo = intervaloMedio > 0
+    ? coberturaDias / intervaloMedio
+    : 0;
+
+  return {
+    fornecedor_cod: grupo.fornecedor_cod,
+    fornecedor: grupo.fornecedor,
+    produto_cod: grupo.produto_cod,
+    produto: grupo.produto,
+    primeira_compra: primeiraCompra.data,
+    ultima_compra: ultimaCompra.data,
+    dias_sem_comprar: diferencaDias_(ultimaCompra.data, periodo.dataFinal),
+    eventos_compra: eventos.length,
+    intervalo_medio_dias: arredondar_(intervaloMedio),
+    qtd_media_por_compra: arredondar_(qtdTotal / eventos.length),
+    qtd_ultima_compra: arredondar_(ultimaCompra.qtd),
+    valor_ultima_compra: arredondar_(ultimaCompra.valor),
+    cobertura_dias: arredondar_(coberturaDias),
+    cobertura_intervalo: arredondar_(coberturaIntervalo),
+    status_ritmo: classificarStatusRitmoCompra_(
+      eventos,
+      intervalos,
+      coberturaDias,
+      cobertura ? cobertura.status_operacional : ''
+    )
+  };
+}
+
+
+function classificarStatusRitmoCompra_(
+  eventos,
+  intervalos,
+  coberturaDias,
+  statusOperacional
+) {
+  if (statusOperacional === 'SEM_GIRO') return 'SEM_GIRO';
+  if (eventos.length === 1) return 'APENAS_UMA_COMPRA';
+
+  const intervaloMedio = media_(intervalos);
+
+  if (coberturaDias < intervaloMedio) {
+    return 'RISCO_ANTES_PROXIMA_COMPRA';
+  }
+
+  if (coberturaDias > intervaloMedio * 2) {
+    return 'POSSIVEL_EXCESSO';
+  }
+
+  if (
+    intervalos.length >= 2 &&
+    Math.max.apply(null, intervalos) >
+      Math.max(1, Math.min.apply(null, intervalos)) * 2
+  ) {
+    return 'COMPRA_IRREGULAR';
+  }
+
+  return 'COBERTURA_ADEQUADA';
+}
+
+
+function escreverAnaliseRitmoCompras_(dados) {
+  const aba = obterOuCriarAbaRitmoCompras_();
+  const ultimaLinha = aba.getLastRow();
+
+  if (ultimaLinha > 1) {
+    aba.getRange(2, 1, ultimaLinha - 1, CABECALHOS_RITMO_COMPRAS_.length)
+      .clearContent();
+  }
+
+  if (!dados.length) return;
+
+  const linhas = dados.map(item =>
+    CABECALHOS_RITMO_COMPRAS_.map(cabecalho => item[cabecalho])
+  );
+
+  aba.getRange(2, 1, linhas.length, CABECALHOS_RITMO_COMPRAS_.length)
+    .setValues(linhas);
+  aba.getRange(2, 5, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
+  aba.getRange(2, 12, linhas.length, 1).setNumberFormat('R$ #,##0.00');
+  aba.setFrozenRows(1);
+
+  const filtroAtual = aba.getFilter();
+  if (filtroAtual) filtroAtual.remove();
+
+  aba.getRange(1, 1, Math.max(2, aba.getLastRow()), aba.getLastColumn())
+    .createFilter();
+}
+
+
+function obterOuCriarAbaRitmoCompras_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let aba = ss.getSheetByName('ANALISE_RITMO_COMPRAS');
+
+  if (!aba) aba = ss.insertSheet('ANALISE_RITMO_COMPRAS');
+
+  aba.getRange(1, 1, 1, CABECALHOS_RITMO_COMPRAS_.length)
+    .setValues([CABECALHOS_RITMO_COMPRAS_]);
+
+  return aba;
+}
+
+
+function abrirHistoricoComprasSidebar() {
+  const html = HtmlService
+    .createHtmlOutputFromFile('HistoricoComprasSidebar')
+    .setTitle('Histórico de compras');
+
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+
+function obterContextoHistoricoComprasSelecionado() {
+  const selecao = obterSkuSelecionado_();
+  const periodo = obterPeriodoAnalise();
+
+  return {
+    fornecedor_cod: selecao.fornecedor_cod,
+    fornecedor: selecao.fornecedor,
+    produto_cod: selecao.produto_cod,
+    produto: selecao.produto,
+    data_inicial: formatarData(periodo.dataInicial),
+    data_final: formatarData(periodo.dataFinal)
+  };
+}
+
+
+function consultarHistoricoCompras(filtros) {
+  const dataInicial = parseData(filtros.data_inicial);
+  const dataFinal = parseData(filtros.data_final);
+
+  if (!dataInicial || !dataFinal || dataInicial > dataFinal) {
+    throw new Error('Informe um período válido.');
+  }
+
+  dataInicial.setHours(0, 0, 0, 0);
+  dataFinal.setHours(23, 59, 59, 999);
+
+  const mapaProdutoAnalise = carregarMapaProdutoAnalise_();
+  const compras = aplicarMapaProdutoAnalise_(
+    prepararComprasRitmoPeriodo_({ dataInicial, dataFinal }),
+    mapaProdutoAnalise
+  ).filter(item =>
+    item.fornecedor_cod === limparCodigo_(filtros.fornecedor_cod) &&
+    item.produto_cod === String(filtros.produto_cod || '').trim() &&
+    (
+      filtros.incluir_movimentos ||
+      classificarOperacaoCompra_(item.operacao) === 'COMPRA'
+    )
+  );
+
+  const movimentos = compras
+    .sort((a, b) => b.data - a.data)
+    .map(item => ({
+      data: formatarData(item.data),
+      nota: item.nota,
+      operacao: item.operacao || 'COMPRA',
+      qtd: arredondar_(item.qtd),
+      valor: arredondar_(item.valor_total)
+    }));
+
+  const comprasNormais = compras.filter(item =>
+    classificarOperacaoCompra_(item.operacao) === 'COMPRA'
+  );
+  const eventosAgrupados = agruparEventosCompraPorDia_(comprasNormais);
+  const chave = criarChaveFornecedorSku_(
+    filtros.fornecedor_cod,
+    filtros.produto_cod
+  );
+  const grupo = eventosAgrupados[chave];
+  let resumo = null;
+
+  if (grupo) {
+    const cobertura = carregarCoberturaFornecedorSku_()[chave];
+    resumo = montarResumoRitmoCompra_(
+      grupo,
+      cobertura,
+      { dataInicial, dataFinal }
+    );
+    resumo.primeira_compra = formatarData(resumo.primeira_compra);
+    resumo.ultima_compra = formatarData(resumo.ultima_compra);
+  }
+
+  return { resumo, movimentos };
+}
+
+
+function obterSkuSelecionado_() {
+  const aba = SpreadsheetApp.getActiveSheet();
+  const nomesPermitidos = [
+    'ANALISE_FORNECEDOR_SKU',
+    'ANALISE_RITMO_COMPRAS'
+  ];
+
+  if (!nomesPermitidos.includes(aba.getName())) {
+    throw new Error(
+      'Selecione uma linha em ANALISE_FORNECEDOR_SKU ou ANALISE_RITMO_COMPRAS.'
+    );
+  }
+
+  const linha = aba.getActiveCell().getRow();
+  if (linha < 2) throw new Error('Selecione uma linha de produto.');
+
+  const cabecalhos = aba.getRange(1, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+  const valores = aba.getRange(linha, 1, 1, aba.getLastColumn())
+    .getValues()[0];
+  const item = {};
+
+  cabecalhos.forEach((cabecalho, indice) => {
+    item[String(cabecalho || '').trim()] = valores[indice];
+  });
+
+  if (!item.fornecedor_cod || !item.produto_cod) {
+    throw new Error('A linha selecionada não contém fornecedor e produto.');
+  }
+
+  return {
+    fornecedor_cod: limparCodigo_(item.fornecedor_cod),
+    fornecedor: String(item.fornecedor || '').trim(),
+    produto_cod: String(item.produto_cod || '').trim(),
+    produto: String(item.produto || '').trim()
+  };
+}
+
+
+function criarChaveFornecedorSku_(fornecedorCod, produtoCod) {
+  return `${limparCodigo_(fornecedorCod)}||${String(produtoCod || '').trim()}`;
+}
+
+
+function formatarDataChave_(data) {
+  return Utilities.formatDate(
+    data,
+    Session.getScriptTimeZone(),
+    'yyyy-MM-dd'
+  );
+}
+
+
+function diferencaDias_(dataInicial, dataFinal) {
+  const inicio = new Date(dataInicial);
+  const fim = new Date(dataFinal);
+  inicio.setHours(0, 0, 0, 0);
+  fim.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((fim - inicio) / 86400000));
+}
+
+
+function media_(valores) {
+  if (!valores.length) return 0;
+  return valores.reduce((soma, valor) => soma + valor, 0) / valores.length;
+}
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; color: #1f2937; padding: 12px; }
+      h2 { font-size: 18px; margin: 0 0 4px; }
+      .subtitulo { color: #6b7280; font-size: 12px; margin-bottom: 16px; }
+      .filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px; }
+      input[type="text"] { box-sizing: border-box; width: 100%; padding: 7px; border: 1px solid #d1d5db; border-radius: 5px; }
+      .check { margin: 10px 0; font-size: 12px; }
+      button { width: 100%; padding: 9px; border: 0; border-radius: 5px; background: #2563eb; color: white; cursor: pointer; }
+      .erro { color: #b91c1c; font-size: 12px; margin-top: 10px; }
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 14px 0; }
+      .card { background: #f3f4f6; border-radius: 6px; padding: 8px; }
+      .card span { display: block; color: #6b7280; font-size: 10px; }
+      .card strong { display: block; font-size: 13px; margin-top: 3px; }
+      .status { grid-column: 1 / -1; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th, td { border-bottom: 1px solid #e5e7eb; padding: 6px 3px; text-align: left; }
+      th { position: sticky; top: 0; background: white; }
+      .numero { text-align: right; }
+      .vazio { color: #6b7280; font-size: 12px; padding: 12px 0; }
+    </style>
+  </head>
+  <body>
+    <h2 id="produto">Carregando...</h2>
+    <div class="subtitulo" id="fornecedor"></div>
+
+    <div class="filtros">
+      <div><label>Data inicial</label><input id="dataInicial" type="text" placeholder="dd/mm/aaaa"></div>
+      <div><label>Data final</label><input id="dataFinal" type="text" placeholder="dd/mm/aaaa"></div>
+    </div>
+    <div class="check">
+      <label><input id="incluirMovimentos" type="checkbox"> Incluir bonificações e devoluções</label>
+    </div>
+    <button onclick="consultar()">Atualizar visualização</button>
+    <div class="erro" id="erro"></div>
+    <div id="resultado"></div>
+
+    <script>
+      let contexto = null;
+
+      google.script.run
+        .withSuccessHandler(inicializar)
+        .withFailureHandler(exibirErro)
+        .obterContextoHistoricoComprasSelecionado();
+
+      function inicializar(dados) {
+        contexto = dados;
+        document.getElementById('produto').textContent = dados.produto_cod + ' — ' + dados.produto;
+        document.getElementById('fornecedor').textContent = dados.fornecedor_cod + ' — ' + dados.fornecedor;
+        document.getElementById('dataInicial').value = dados.data_inicial;
+        document.getElementById('dataFinal').value = dados.data_final;
+        consultar();
+      }
+
+      function consultar() {
+        if (!contexto) return;
+        document.getElementById('erro').textContent = '';
+        document.getElementById('resultado').innerHTML = '<div class="vazio">Consultando...</div>';
+
+        google.script.run
+          .withSuccessHandler(renderizar)
+          .withFailureHandler(exibirErro)
+          .consultarHistoricoCompras({
+            fornecedor_cod: contexto.fornecedor_cod,
+            produto_cod: contexto.produto_cod,
+            data_inicial: document.getElementById('dataInicial').value,
+            data_final: document.getElementById('dataFinal').value,
+            incluir_movimentos: document.getElementById('incluirMovimentos').checked
+          });
+      }
+
+      function renderizar(dados) {
+        if (!dados.resumo) {
+          document.getElementById('resultado').innerHTML = '<div class="vazio">Nenhuma compra normal encontrada no período.</div>';
+          return;
+        }
+
+        const r = dados.resumo;
+        const cards = [
+          ['Primeira compra', r.primeira_compra],
+          ['Última compra', r.ultima_compra],
+          ['Dias sem comprar', r.dias_sem_comprar],
+          ['Eventos de compra', r.eventos_compra],
+          ['Intervalo médio', formatarNumero(r.intervalo_medio_dias) + ' dias'],
+          ['Qtd. média/evento', formatarNumero(r.qtd_media_por_compra)],
+          ['Cobertura estimada', formatarNumero(r.cobertura_dias) + ' dias'],
+          ['Cobertura ÷ intervalo', formatarNumero(r.cobertura_intervalo)],
+          ['Status do ritmo', r.status_ritmo, 'status']
+        ];
+
+        let html = '<div class="cards">' + cards.map(card =>
+          '<div class="card ' + (card[2] || '') + '"><span>' + card[0] + '</span><strong>' + card[1] + '</strong></div>'
+        ).join('') + '</div>';
+
+        html += '<table><thead><tr><th>Data</th><th>Nota</th><th>Operação</th><th class="numero">Qtd.</th><th class="numero">Valor</th></tr></thead><tbody>';
+        html += dados.movimentos.map(item =>
+          '<tr><td>' + item.data + '</td><td>' + escapar(item.nota) + '</td><td>' + escapar(item.operacao) + '</td><td class="numero">' + formatarNumero(item.qtd) + '</td><td class="numero">' + formatarMoeda(item.valor) + '</td></tr>'
+        ).join('');
+        html += '</tbody></table>';
+        document.getElementById('resultado').innerHTML = html;
+      }
+
+      function exibirErro(erro) {
+        document.getElementById('resultado').innerHTML = '';
+        document.getElementById('erro').textContent = erro.message || String(erro);
+      }
+
+      function formatarNumero(valor) {
+        return Number(valor || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      }
+
+      function formatarMoeda(valor) {
+        return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+
+      function escapar(valor) {
+        const div = document.createElement('div');
+        div.textContent = valor == null ? '' : String(valor);
+        return div.innerHTML;
+      }
+    </script>
+  </body>
+</html>
