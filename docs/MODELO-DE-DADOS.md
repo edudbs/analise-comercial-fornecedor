@@ -221,6 +221,37 @@ cobertura_intervalo
 status_ritmo
 ```
 
+## ANALISE_TENDENCIA_VENDAS
+
+Compara a velocidade das vendas nos 14 dias mais recentes, terminando em
+`DATA_FINAL`, com os 14 dias imediatamente anteriores. A visão também compara
+a média recente com a média diária do período completo.
+
+```text
+fornecedor_cod
+fornecedor
+produto_cod
+produto
+inicio_periodo_analise
+fim_periodo_analise
+media_dia_periodo
+inicio_janela_anterior
+fim_janela_anterior
+qtd_venda_anterior
+media_dia_anterior
+inicio_janela_recente
+fim_janela_recente
+qtd_venda_recente
+media_dia_recente
+variacao_vs_anterior
+variacao_vs_periodo
+tendencia_venda
+saldo_movimentacao
+cobertura_dias_periodo
+cobertura_dias_recente
+status_dados
+```
+
 ## ANALISE_SKU_CONSOLIDADA
 
 ```text
