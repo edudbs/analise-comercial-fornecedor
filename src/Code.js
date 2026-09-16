@@ -20,6 +20,7 @@ function onOpen() {
     .addItem('8. Reprocessar conversões de compras', 'reprocessarConversoesCompras')
 
     .addItem('9. Detalhar histórico de compras', 'abrirHistoricoComprasSidebar')
+    .addItem('Painel de tendência de vendas', 'abrirPainelTendenciaVendas')
     
     .addSeparator()
 
