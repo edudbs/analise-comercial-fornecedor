@@ -52,6 +52,8 @@ const analiseFornecedor = gerarAnaliseFornecedor_(analiseSku);
 
     atualizarAnaliseRitmoCompras();
 
+    atualizarAnaliseTendenciaVendas();
+
     ui.alert(
       'Análises atualizadas com sucesso.\n' +
       `SKUs analisados: ${analiseSku.length}\n` +
