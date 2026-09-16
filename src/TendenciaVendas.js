@@ -7,6 +7,9 @@ const CABECALHOS_TENDENCIA_VENDAS_ = [
   'produto',
   'inicio_periodo_analise',
   'fim_periodo_analise',
+  'inicio_periodo_efetivo_vendas',
+  'fim_periodo_efetivo_vendas',
+  'dias_periodo_efetivo_vendas',
   'media_dia_periodo',
   'inicio_janela_anterior',
   'fim_janela_anterior',
@@ -28,17 +31,26 @@ const CABECALHOS_TENDENCIA_VENDAS_ = [
 
 function atualizarAnaliseTendenciaVendas() {
   const periodo = obterPeriodoAnalise();
-  const janelas = criarJanelasTendencia_(periodo.dataFinal);
-  const mapaProdutoAnalise = carregarMapaProdutoAnalise_();
   const vendasRaw = lerVendasTendencia_();
+  const periodoEfetivo = obterPeriodoEfetivoVendas_(
+    periodo,
+    vendasRaw
+  );
+  const janelas = criarJanelasTendencia_(
+    periodoEfetivo.dataFinal
+  );
+  const mapaProdutoAnalise = carregarMapaProdutoAnalise_();
   const vendasMapeadas = aplicarMapaProdutoAnalise_(
     vendasRaw,
     mapaProdutoAnalise
   );
-  const vendasPorSku = agruparVendasJanelas_(vendasMapeadas, janelas);
+  const vendasPorSku = agruparVendasJanelas_(
+    vendasMapeadas,
+    janelas,
+    periodoEfetivo
+  );
   const itensBase = lerDados('ANALISE_FORNECEDOR_SKU');
   const participacoes = calcularParticipacoesFornecedorTendencia_(itensBase);
-  const statusDados = classificarCoberturaDadosTendencia_(vendasRaw, janelas);
 
   const resultado = itensBase
     .map(item => montarLinhaTendenciaVendas_(
@@ -47,7 +59,7 @@ function atualizarAnaliseTendenciaVendas() {
       participacoes,
       periodo,
       janelas,
-      statusDados
+      periodoEfetivo
     ))
     .sort((a, b) => {
       const fornecedor = a.fornecedor.localeCompare(b.fornecedor);
@@ -93,7 +105,7 @@ function criarJanelasTendencia_(dataFinalPeriodo) {
 }
 
 
-function agruparVendasJanelas_(vendas, janelas) {
+function agruparVendasJanelas_(vendas, janelas, periodoEfetivo) {
   const mapa = {};
 
   vendas.forEach(item => {
@@ -102,18 +114,23 @@ function agruparVendasJanelas_(vendas, janelas) {
       data <= janelas.fimAnterior;
     const naRecente = data >= janelas.inicioRecente &&
       data <= janelas.fimRecente;
+    const noPeriodoEfetivo = periodoEfetivo.temDados &&
+      data >= periodoEfetivo.dataInicial &&
+      data <= periodoEfetivo.dataFinal;
 
-    if (!naAnterior && !naRecente) return;
+    if (!naAnterior && !naRecente && !noPeriodoEfetivo) return;
 
     if (!mapa[item.produto_cod]) {
       mapa[item.produto_cod] = {
         qtd_anterior: 0,
-        qtd_recente: 0
+        qtd_recente: 0,
+        qtd_periodo: 0
       };
     }
 
     if (naAnterior) mapa[item.produto_cod].qtd_anterior += item.qtd;
     if (naRecente) mapa[item.produto_cod].qtd_recente += item.qtd;
+    if (noPeriodoEfetivo) mapa[item.produto_cod].qtd_periodo += item.qtd;
   });
 
   return mapa;
@@ -178,7 +195,7 @@ function montarLinhaTendenciaVendas_(
   participacoes,
   periodo,
   janelas,
-  statusDados
+  periodoEfetivo
 ) {
   const produtoCod = String(item.produto_cod || '').trim();
   const chave = criarChaveFornecedorSku_(
@@ -188,15 +205,17 @@ function montarLinhaTendenciaVendas_(
   const participacao = participacoes[chave] || 0;
   const vendasSku = vendasPorSku[produtoCod] || {
     qtd_anterior: 0,
-    qtd_recente: 0
+    qtd_recente: 0,
+    qtd_periodo: 0
   };
   const qtdAnterior = vendasSku.qtd_anterior * participacao;
   const qtdRecente = vendasSku.qtd_recente * participacao;
   const mediaAnterior = qtdAnterior / DIAS_JANELA_TENDENCIA_;
   const mediaRecente = qtdRecente / DIAS_JANELA_TENDENCIA_;
-  const mediaPeriodo = parseNumero(
-    item.venda_media_dia || item.qtd_venda_media_dia
-  );
+  const qtdPeriodo = vendasSku.qtd_periodo * participacao;
+  const mediaPeriodo = periodoEfetivo.dias > 0
+    ? qtdPeriodo / periodoEfetivo.dias
+    : 0;
   const saldoMovimentacao = parseNumero(item.saldo_movimentacao);
   const variacaoAnterior = calcularVariacaoTendencia_(
     mediaRecente,
@@ -214,6 +233,13 @@ function montarLinhaTendenciaVendas_(
     produto: String(item.produto || '').trim(),
     inicio_periodo_analise: new Date(periodo.dataInicial),
     fim_periodo_analise: new Date(periodo.dataFinal),
+    inicio_periodo_efetivo_vendas: periodoEfetivo.temDados
+      ? periodoEfetivo.dataInicial
+      : '',
+    fim_periodo_efetivo_vendas: periodoEfetivo.temDados
+      ? periodoEfetivo.dataFinal
+      : '',
+    dias_periodo_efetivo_vendas: periodoEfetivo.dias,
     media_dia_periodo: arredondar_(mediaPeriodo),
     inicio_janela_anterior: janelas.inicioAnterior,
     fim_janela_anterior: janelas.fimAnterior,
@@ -228,7 +254,7 @@ function montarLinhaTendenciaVendas_(
     tendencia_venda: classificarTendenciaVendas_(
       mediaAnterior,
       mediaRecente,
-      statusDados
+      periodoEfetivo.temHistoricoParaComparacao
     ),
     saldo_movimentacao: arredondar_(saldoMovimentacao),
     cobertura_dias_periodo: arredondar_(
@@ -237,7 +263,7 @@ function montarLinhaTendenciaVendas_(
     cobertura_dias_recente: mediaRecente > 0
       ? arredondar_(saldoMovimentacao / mediaRecente)
       : '',
-    status_dados: statusDados
+    status_dados: periodoEfetivo.statusDados
   };
 }
 
@@ -251,8 +277,12 @@ function calcularVariacaoTendencia_(valorAtual, valorBase) {
 }
 
 
-function classificarTendenciaVendas_(mediaAnterior, mediaRecente, statusDados) {
-  if (statusDados !== 'COMPLETO') return 'DADOS_INCOMPLETOS';
+function classificarTendenciaVendas_(
+  mediaAnterior,
+  mediaRecente,
+  temHistoricoParaComparacao
+) {
+  if (!temHistoricoParaComparacao) return 'DADOS_INCOMPLETOS';
   if (mediaAnterior === 0 && mediaRecente === 0) return 'SEM_MOVIMENTO';
   if (mediaAnterior === 0 && mediaRecente > 0) return 'ACELERANDO';
   if (mediaAnterior > 0 && mediaRecente === 0) return 'DESACELERANDO';
@@ -265,20 +295,62 @@ function classificarTendenciaVendas_(mediaAnterior, mediaRecente, statusDados) {
 }
 
 
-function classificarCoberturaDadosTendencia_(vendas, janelas) {
-  if (!vendas.length) return 'SEM_DADOS_VENDAS';
+function obterPeriodoEfetivoVendas_(periodo, vendas) {
+  const inicioConfigurado = inicioDoDiaTendencia_(periodo.dataInicial);
+  const fimConfigurado = inicioDoDiaTendencia_(periodo.dataFinal);
+  const datas = vendas
+    .map(item => inicioDoDiaTendencia_(item.data))
+    .sort((a, b) => a - b);
 
-  const datas = vendas.map(item => inicioDoDiaTendencia_(item.data));
-  const menorData = new Date(Math.min.apply(null, datas));
-  const maiorData = new Date(Math.max.apply(null, datas));
+  const datasNoPeriodo = datas.filter(data =>
+    data >= inicioConfigurado && data <= fimConfigurado
+  );
 
-  if (menorData > janelas.inicioAnterior && maiorData < janelas.fimRecente) {
-    return 'INCOMPLETO_INICIO_E_FIM';
+  if (!datasNoPeriodo.length) {
+    return {
+      dataInicial: inicioConfigurado,
+      dataFinal: fimConfigurado,
+      dias: 0,
+      temDados: false,
+      temHistoricoParaComparacao: false,
+      statusDados: 'SEM_DADOS_NO_PERIODO'
+    };
   }
 
-  if (menorData > janelas.inicioAnterior) return 'INCOMPLETO_NO_INICIO';
-  if (maiorData < janelas.fimRecente) return 'INCOMPLETO_NO_FIM';
-  return 'COMPLETO';
+  const primeiraDisponivel = datas[0];
+  const ultimaDisponivel = datas[datas.length - 1];
+  const dataInicial = datasNoPeriodo[0];
+  const dataFinal = datasNoPeriodo[datasNoPeriodo.length - 1];
+  const janelas = criarJanelasTendencia_(dataFinal);
+  const inicioEfetivo = dataInicial > inicioConfigurado
+    ? dataInicial
+    : inicioConfigurado;
+  const fimEfetivo = dataFinal < fimConfigurado
+    ? dataFinal
+    : fimConfigurado;
+  const inicioFaltante = inicioEfetivo > inicioConfigurado;
+  const fimFaltante = fimEfetivo < fimConfigurado;
+  let statusDados = 'DADOS_ATUALIZADOS';
+
+  if (inicioFaltante && fimFaltante) {
+    statusDados = 'DADOS_DE_' + formatarData(inicioEfetivo) +
+      '_ATE_' + formatarData(fimEfetivo);
+  } else if (inicioFaltante) {
+    statusDados = 'DADOS_DESDE_' + formatarData(inicioEfetivo);
+  } else if (fimFaltante) {
+    statusDados = 'DADOS_ATE_' + formatarData(fimEfetivo);
+  }
+
+  return {
+    dataInicial: inicioEfetivo,
+    dataFinal: fimEfetivo,
+    dias: diferencaDias_(inicioEfetivo, fimEfetivo) + 1,
+    temDados: true,
+    temHistoricoParaComparacao:
+      primeiraDisponivel <= janelas.inicioAnterior &&
+      ultimaDisponivel >= janelas.fimRecente,
+    statusDados
+  };
 }
 
 
@@ -304,9 +376,10 @@ function escreverAnaliseTendenciaVendas_(dados) {
   aba.getRange(2, 1, linhas.length, CABECALHOS_TENDENCIA_VENDAS_.length)
     .setValues(linhas);
   aba.getRange(2, 5, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
-  aba.getRange(2, 8, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
-  aba.getRange(2, 12, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
-  aba.getRange(2, 16, linhas.length, 2).setNumberFormat('0.00%');
+  aba.getRange(2, 7, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
+  aba.getRange(2, 11, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
+  aba.getRange(2, 15, linhas.length, 2).setNumberFormat('dd/MM/yyyy');
+  aba.getRange(2, 19, linhas.length, 2).setNumberFormat('0.00%');
   aba.setFrozenRows(1);
 
   const filtroAtual = aba.getFilter();
