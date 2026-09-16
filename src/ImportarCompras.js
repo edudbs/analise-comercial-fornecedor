@@ -231,6 +231,7 @@ function processarCsvCompras(conteudoCsv) {
        * produto
        * unidade
        * qtd_unidade
+       * unidades_por_embalagem_corrigida
        * qtd_embalagem_corrigida
        * qtd
        * custo_unit
