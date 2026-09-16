@@ -22,6 +22,11 @@ function importarComprasDoDrive() {
       const conteudo =
         lerConteudoArquivoCsv(arquivo);
 
+      garantirColunaComprasRaw_(
+        'qtd_embalagem_corrigida',
+        'unidades_por_embalagem_corrigida'
+      );
+
       const registros =
         processarCsvCompras(conteudo);
 
@@ -226,6 +231,7 @@ function processarCsvCompras(conteudoCsv) {
        * produto
        * unidade
        * qtd_unidade
+       * qtd_embalagem_corrigida
        * qtd
        * custo_unit
        * valor_total
@@ -256,6 +262,18 @@ function processarCsvCompras(conteudoCsv) {
          * estiver pendente.
          */
         conversao.unidadesPorEmbalagemCorrigida,
+
+        /*
+         * Leitura operacional corrigida:
+         * quantidade de embalagens
+         * representada pela quantidade
+         * convertida e pela embalagem
+         * validada.
+         */
+        calcularQtdEmbalagemCorrigida_(
+          conversao.qtdAnalise,
+          conversao.unidadesPorEmbalagemCorrigida
+        ),
 
         /*
          * Quantidade normalizada para
@@ -706,6 +724,11 @@ function reprocessarConversoesCompras() {
       return;
     }
 
+    garantirColunaComprasRaw_(
+      'qtd_embalagem_corrigida',
+      'unidades_por_embalagem_corrigida'
+    );
+
     const ultimaLinha =
       aba.getLastRow();
 
@@ -750,6 +773,9 @@ function reprocessarConversoesCompras() {
       qtdUnidadeCorrigida:
         cabecalhos.indexOf('unidades_por_embalagem_corrigida'),
 
+      qtdEmbalagemCorrigida:
+        cabecalhos.indexOf('qtd_embalagem_corrigida'),
+
       qtd:
         cabecalhos.indexOf('qtd_compra_convertida'),
 
@@ -780,6 +806,7 @@ function reprocessarConversoesCompras() {
     let totalPendentes = 0;
 
     const novasUnidadesCorrigidas = [];
+    const novasQtdEmbalagemCorrigida = [];
     const novasQuantidades = [];
     const novosFatores = [];
 
@@ -803,6 +830,10 @@ function reprocessarConversoesCompras() {
       if (linhaVazia) {
         novasUnidadesCorrigidas.push([
           linha[idx.qtdUnidadeCorrigida]
+        ]);
+
+        novasQtdEmbalagemCorrigida.push([
+          linha[idx.qtdEmbalagemCorrigida]
         ]);
 
         novasQuantidades.push([
@@ -850,6 +881,11 @@ function reprocessarConversoesCompras() {
           ? ''
           : Number(linha[idx.qtdUnidadeCorrigida]);
 
+      const qtdEmbalagemCorrigidaAtual =
+        linha[idx.qtdEmbalagemCorrigida] === ''
+          ? ''
+          : Number(linha[idx.qtdEmbalagemCorrigida]);
+
       const qtdAtual =
         Number(
           linha[idx.qtd] || 0
@@ -889,13 +925,21 @@ function reprocessarConversoesCompras() {
           ? ''
           : Number(conversao.unidadesPorEmbalagemCorrigida);
 
+      const novaQtdEmbalagemCorrigida =
+        calcularQtdEmbalagemCorrigida_(
+          novaQtd,
+          novaUnidadeCorrigida
+        );
+
       if (
         Number(novaQtd) !==
           Number(qtdAtual) ||
         Number(novoFator) !==
           Number(fatorAtual) ||
         String(novaUnidadeCorrigida) !==
-          String(unidadeCorrigidaAtual)
+          String(unidadeCorrigidaAtual) ||
+        String(novaQtdEmbalagemCorrigida) !==
+          String(qtdEmbalagemCorrigidaAtual)
       ) {
         totalAlterados++;
       }
@@ -911,6 +955,10 @@ function reprocessarConversoesCompras() {
         novaUnidadeCorrigida
       ]);
 
+      novasQtdEmbalagemCorrigida.push([
+        novaQtdEmbalagemCorrigida
+      ]);
+
       novasQuantidades.push([
         novaQtd
       ]);
@@ -924,7 +972,9 @@ function reprocessarConversoesCompras() {
     /*
      * Atualiza SOMENTE:
      *
-     * qtd
+     * unidades_por_embalagem_corrigida
+     * qtd_embalagem_corrigida
+     * qtd_compra_convertida
      * fator_conversao_aplicado
      *
      * qtd_original nunca é alterada.
@@ -938,6 +988,17 @@ function reprocessarConversoesCompras() {
       )
       .setValues(
         novasUnidadesCorrigidas
+      );
+
+    aba
+      .getRange(
+        2,
+        idx.qtdEmbalagemCorrigida + 1,
+        novasQtdEmbalagemCorrigida.length,
+        1
+      )
+      .setValues(
+        novasQtdEmbalagemCorrigida
       );
 
     aba
@@ -1549,6 +1610,96 @@ function lerAbaComoObjetosConversao_(
 }
 
 
+function calcularQtdEmbalagemCorrigida_(
+  qtdConvertida,
+  unidadesPorEmbalagemCorrigida
+) {
+  const quantidade =
+    Number(qtdConvertida || 0);
+
+  const unidades =
+    Number(unidadesPorEmbalagemCorrigida || 0);
+
+  if (
+    !Number.isFinite(quantidade) ||
+    !Number.isFinite(unidades) ||
+    quantidade <= 0 ||
+    unidades <= 0
+  ) {
+    return '';
+  }
+
+  return arredondarConversao_(
+    quantidade / unidades,
+    3
+  );
+}
+
+
+function garantirColunaComprasRaw_(
+  nomeColuna,
+  colunaReferencia
+) {
+  const aba =
+    obterAba(
+      'COMPRAS_RAW'
+    );
+
+  const ultimaColuna =
+    aba.getLastColumn();
+
+  if (ultimaColuna === 0) {
+    throw new Error(
+      'COMPRAS_RAW não possui cabeçalho.'
+    );
+  }
+
+  const cabecalhos =
+    aba
+      .getRange(
+        1,
+        1,
+        1,
+        ultimaColuna
+      )
+      .getValues()[0]
+      .map(valor =>
+        String(valor || '')
+          .trim()
+          .toLowerCase()
+      );
+
+  if (cabecalhos.includes(nomeColuna)) {
+    return;
+  }
+
+  const idxReferencia =
+    cabecalhos.indexOf(colunaReferencia);
+
+  if (idxReferencia === -1) {
+    throw new Error(
+      'COMPRAS_RAW não possui a coluna ' +
+      colunaReferencia +
+      '.'
+    );
+  }
+
+  const colunaReferenciaNumero =
+    idxReferencia + 1;
+
+  aba.insertColumnAfter(
+    colunaReferenciaNumero
+  );
+
+  aba
+    .getRange(
+      1,
+      colunaReferenciaNumero + 1
+    )
+    .setValue(nomeColuna);
+}
+
+
 function inserirComprasRaw(
   registros
 ) {
@@ -1556,6 +1707,11 @@ function inserirComprasRaw(
     obterAba(
       'COMPRAS_RAW'
     );
+
+  garantirColunaComprasRaw_(
+    'qtd_embalagem_corrigida',
+    'unidades_por_embalagem_corrigida'
+  );
 
   const linhaInicial =
     aba.getLastRow() + 1;
