@@ -359,44 +359,16 @@ function resolverConversaoCompra_(dados) {
 
 
   /*
-   * EMBALAGENS COM FATOR INFORMADO
-   *
-   * O próprio Varejo Fácil informou
-   * mais de uma unidade dentro da
-   * embalagem.
-   *
-   * Exemplos:
-   *
-   * 70 FD × 6 = 420
-   * 5 DP × 10 = 50
-   * 1 CX × 12 = 12
-   */
-  if (qtdUnidade > 1) {
-    return {
-      qtdAnalise:
-        qtdItens * qtdUnidade,
-
-      fator:
-        qtdUnidade,
-
-      unidadesPorEmbalagemCorrigida:
-        qtdUnidade,
-
-      origem:
-        'AUTOMATICO',
-
-      status:
-        'VALIDADO'
-    };
-  }
-
-
-  /*
    * MAPA_CONVERSAO_UNIDADE
    *
-   * Usado quando o relatório não
-   * informa corretamente o conteúdo
-   * da embalagem.
+   * Regras manuais validadas têm
+   * prioridade sobre o fator vindo do
+   * relatório. Isso permite corrigir
+   * casos em que o Varejo Fácil informa
+   * uma embalagem incorreta, por exemplo:
+   *
+   * relatório = 60 unidades/caixa
+   * correto   = 15 unidades/caixa
    */
   const chave =
     criarChaveConversao_(
@@ -428,6 +400,41 @@ function resolverConversaoCompra_(dados) {
       origem:
         conversaoManual.origem ||
         'MANUAL',
+
+      status:
+        'VALIDADO'
+    };
+  }
+
+
+  /*
+   * EMBALAGENS COM FATOR INFORMADO
+   *
+   * O próprio Varejo Fácil informou
+   * mais de uma unidade dentro da
+   * embalagem. Esta regra só é aplicada
+   * quando não existe correção manual
+   * validada no mapa.
+   *
+   * Exemplos:
+   *
+   * 70 FD × 6 = 420
+   * 5 DP × 10 = 50
+   * 1 CX × 12 = 12
+   */
+  if (qtdUnidade > 1) {
+    return {
+      qtdAnalise:
+        qtdItens * qtdUnidade,
+
+      fator:
+        qtdUnidade,
+
+      unidadesPorEmbalagemCorrigida:
+        qtdUnidade,
+
+      origem:
+        'AUTOMATICO',
 
       status:
         'VALIDADO'
