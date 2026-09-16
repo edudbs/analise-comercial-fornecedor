@@ -184,7 +184,7 @@ function calcularParticipacoesFornecedorTendencia_(itensBase) {
     }
 
     participacoes[criarChaveFornecedorSku_(fornecedorCod, produtoCod)] =
-      participacao;
+      numeroFinitoTendencia_(participacao);
   });
 
   return participacoes;
@@ -204,7 +204,7 @@ function montarLinhaTendenciaVendas_(
     item.fornecedor_cod,
     produtoCod
   );
-  const participacao = participacoes[chave] || 0;
+  const participacao = numeroFinitoTendencia_(participacoes[chave]);
   const vendasSku = vendasPorSku[produtoCod] || {
     qtd_anterior: 0,
     qtd_recente: 0,
@@ -215,8 +215,9 @@ function montarLinhaTendenciaVendas_(
   const mediaAnterior = qtdAnterior / DIAS_JANELA_TENDENCIA_;
   const mediaRecente = qtdRecente / DIAS_JANELA_TENDENCIA_;
   const qtdPeriodo = vendasSku.qtd_periodo * participacao;
-  const mediaPeriodo = periodoEfetivo.dias > 0
-    ? qtdPeriodo / periodoEfetivo.dias
+  const diasPeriodoEfetivo = numeroFinitoTendencia_(periodoEfetivo.dias);
+  const mediaPeriodo = diasPeriodoEfetivo > 0
+    ? qtdPeriodo / diasPeriodoEfetivo
     : 0;
   const saldoMovimentacao = parseNumero(item.saldo_movimentacao);
   const variacaoAnterior = calcularVariacaoTendencia_(
@@ -241,7 +242,7 @@ function montarLinhaTendenciaVendas_(
     fim_periodo_efetivo_vendas: periodoEfetivo.temDados
       ? formatarData(periodoEfetivo.dataFinal)
       : '',
-    dias_periodo_efetivo_vendas: periodoEfetivo.dias,
+    dias_periodo_efetivo_vendas: diasPeriodoEfetivo,
     media_dia_periodo: arredondar_(mediaPeriodo),
     inicio_janela_anterior: formatarData(janelas.inicioAnterior),
     fim_janela_anterior: formatarData(janelas.fimAnterior),
@@ -424,6 +425,12 @@ function calcularDiasInclusivosTendencia_(dataInicial, dataFinal) {
   const inicio = inicioDoDiaTendencia_(dataInicial).getTime();
   const fim = inicioDoDiaTendencia_(dataFinal).getTime();
   return Math.max(0, Math.round((fim - inicio) / 86400000) + 1);
+}
+
+
+function numeroFinitoTendencia_(valor) {
+  const numero = Number(valor);
+  return isFinite(numero) ? numero : 0;
 }
 
 
