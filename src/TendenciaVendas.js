@@ -80,7 +80,9 @@ function lerVendasTendencia_() {
       qtd: parseNumero(item.qtd),
       valor_venda: parseNumero(item.faturamento)
     }))
-    .filter(item => item.data && item.produto_cod);
+    .filter(item =>
+      dataValidaTendencia_(item.data) && item.produto_cod
+    );
 }
 
 
@@ -231,22 +233,22 @@ function montarLinhaTendenciaVendas_(
     fornecedor: String(item.fornecedor || '').trim(),
     produto_cod: produtoCod,
     produto: String(item.produto || '').trim(),
-    inicio_periodo_analise: new Date(periodo.dataInicial),
-    fim_periodo_analise: new Date(periodo.dataFinal),
+    inicio_periodo_analise: formatarData(periodo.dataInicial),
+    fim_periodo_analise: formatarData(periodo.dataFinal),
     inicio_periodo_efetivo_vendas: periodoEfetivo.temDados
-      ? periodoEfetivo.dataInicial
+      ? formatarData(periodoEfetivo.dataInicial)
       : '',
     fim_periodo_efetivo_vendas: periodoEfetivo.temDados
-      ? periodoEfetivo.dataFinal
+      ? formatarData(periodoEfetivo.dataFinal)
       : '',
     dias_periodo_efetivo_vendas: periodoEfetivo.dias,
     media_dia_periodo: arredondar_(mediaPeriodo),
-    inicio_janela_anterior: janelas.inicioAnterior,
-    fim_janela_anterior: janelas.fimAnterior,
+    inicio_janela_anterior: formatarData(janelas.inicioAnterior),
+    fim_janela_anterior: formatarData(janelas.fimAnterior),
     qtd_venda_anterior: arredondar_(qtdAnterior),
     media_dia_anterior: arredondar_(mediaAnterior),
-    inicio_janela_recente: janelas.inicioRecente,
-    fim_janela_recente: janelas.fimRecente,
+    inicio_janela_recente: formatarData(janelas.inicioRecente),
+    fim_janela_recente: formatarData(janelas.fimRecente),
     qtd_venda_recente: arredondar_(qtdRecente),
     media_dia_recente: arredondar_(mediaRecente),
     variacao_vs_anterior: variacaoAnterior,
@@ -344,7 +346,10 @@ function obterPeriodoEfetivoVendas_(periodo, vendas) {
   return {
     dataInicial: inicioEfetivo,
     dataFinal: fimEfetivo,
-    dias: diferencaDias_(inicioEfetivo, fimEfetivo) + 1,
+    dias: calcularDiasInclusivosTendencia_(
+      inicioEfetivo,
+      fimEfetivo
+    ),
     temDados: true,
     temHistoricoParaComparacao:
       primeiraDisponivel <= janelas.inicioAnterior &&
@@ -407,6 +412,18 @@ function inicioDoDiaTendencia_(data) {
   const resultado = new Date(data);
   resultado.setHours(0, 0, 0, 0);
   return resultado;
+}
+
+
+function dataValidaTendencia_(data) {
+  return data instanceof Date && !isNaN(data.getTime());
+}
+
+
+function calcularDiasInclusivosTendencia_(dataInicial, dataFinal) {
+  const inicio = inicioDoDiaTendencia_(dataInicial).getTime();
+  const fim = inicioDoDiaTendencia_(dataFinal).getTime();
+  return Math.max(0, Math.round((fim - inicio) / 86400000) + 1);
 }
 
 
