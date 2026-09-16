@@ -7,6 +7,12 @@ tamanho dos eventos de compra. Bonificações e devoluções não contam como
 eventos de compra. Compras normais do mesmo fornecedor e produto na mesma
 data de entrada formam um único evento.
 
+`ANALISE_TENDENCIA_VENDAS` compara duas janelas consecutivas de 14 dias,
+ancoradas em `DATA_FINAL`. Variações iguais ou superiores a 20% são
+classificadas como `ACELERANDO`; iguais ou inferiores a -20%, como
+`DESACELERANDO`; valores intermediários, como `ESTAVEL`. O campo
+`status_dados` informa se `VENDAS_RAW` cobre integralmente os 28 dias.
+
 ## Quantidades e movimentos
 
 ### qtd_compra
