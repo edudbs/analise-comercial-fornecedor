@@ -73,6 +73,14 @@ function limparBases() {
     limparAbaMantendoCabecalho_('ANALISE_RITMO_COMPRAS');
   }
 
+  const abaTendencia = SpreadsheetApp
+    .getActiveSpreadsheet()
+    .getSheetByName('ANALISE_TENDENCIA_VENDAS');
+
+  if (abaTendencia) {
+    limparAbaMantendoCabecalho_('ANALISE_TENDENCIA_VENDAS');
+  }
+
   limparAbaMantendoCabecalho_('VENDAS_SEM_COMPRA');
   limparAbaMantendoCabecalho_('MOVIMENTOS_ESPECIAIS');
 
