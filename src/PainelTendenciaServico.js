@@ -20,10 +20,28 @@ function obterDadosPainelTendencia() {
       const item = {};
       CABECALHOS_TENDENCIA_VENDAS_.forEach(c => {
         const valor = linha[cabecalhos.indexOf(c)];
-        item[c] = valor instanceof Date
-          ? Utilities.formatDate(valor, ss.getSpreadsheetTimeZone(), 'dd/MM/yyyy')
-          : valor;
+        item[c] = normalizarValorPainelTendencia_(valor, ss);
       });
       return item;
     });
+}
+
+
+function normalizarValorPainelTendencia_(valor, ss) {
+  if (valor instanceof Date) {
+    return Utilities.formatDate(
+      valor,
+      ss.getSpreadsheetTimeZone(),
+      'dd/MM/yyyy'
+    );
+  }
+
+  if (typeof valor === 'number') {
+    return isFinite(valor) ? valor : '';
+  }
+
+  const texto = String(valor || '').trim();
+  if (!texto || texto.toUpperCase() === 'NAN') return '';
+
+  return valor;
 }
